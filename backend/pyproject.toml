@@ -1,0 +1,27 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiofiles>=25.1.0",
+    "elasticsearch>=8.19.0,<9.0.0",
+    "fastapi>=0.136.1",
+    "langchain>=1.2.17",
+    "langchain-chroma>=1.1.0",
+    "langchain-community>=0.4.1",
+    "langchain-elasticsearch>=1.0.0",
+    "langchain-huggingface>=1.2.2",
+    "langchain-nvidia-ai-endpoints>=1.2.1",
+    "langchain-text-splitters>=1.1.2",
+    "pillow>=12.2.0",
+    "pydantic>=2.13.3",
+    "pydantic-settings>=2.14.0",
+    "pymupdf>=1.27.2.3",
+    "python-multipart>=0.0.27",
+    "sentence-transformers>=5.4.1",
+    "tiktoken>=0.12.0",
+    "tqdm>=4.67.3",
+    "uvicorn>=0.46.0",
+]
