@@ -664,7 +664,7 @@ Below are short walkthroughs of each core feature.
 
 Each session keeps its own independent conversation history, so you can maintain different sessions side by side.
 
-<video src="data/demos/01_sessions.mov" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/8f3df5f9-5227-4f5d-8350-771544d66387" controls width="100%"></video>
 
 ---
 
@@ -672,7 +672,7 @@ Each session keeps its own independent conversation history, so you can maintain
 
 Upload a textbook, track ingestion progress, and explore the document list.
 
-<video src="data/demos/02_documents.mp4" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/7c4c3361-b8c9-47b3-b05a-79ff4891694d" controls width="100%"></video>
 
 ---
 
@@ -680,7 +680,7 @@ Upload a textbook, track ingestion progress, and explore the document list.
 
 Type a question, watch the AI stream its response token by token, and see the source page thumbnails appear once the answer is complete.
 
-<video src="data/demos/03_conversation.mov" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/dbef9bc8-b63c-471c-9586-0b1ef895030d" controls width="100%"></video>
 
 ---
 
@@ -688,4 +688,4 @@ Type a question, watch the AI stream its response token by token, and see the so
 
 Every session, page image, vector database, and Elasticsearch index is persisted in `.store/` on disk. Nothing lives in memory only — all data survives a full container restart.
 
-<video src="data/demos/04_memory.mov" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/3c38f925-6f8e-4acd-bd96-fd99bef12b4c" controls width="100%"></video>
