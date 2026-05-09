@@ -680,7 +680,7 @@ Upload a textbook, track ingestion progress, and explore the document list.
 
 Type a question, watch the AI stream its response token by token, and see the source page thumbnails appear once the answer is complete.
 
-<video src="data/demos/03_conversation.mov" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/dbef9bc8-b63c-471c-9586-0b1ef895030d" controls width="100%"></video>
 
 ---
 
@@ -688,4 +688,4 @@ Type a question, watch the AI stream its response token by token, and see the so
 
 Every session, page image, vector database, and Elasticsearch index is persisted in `.store/` on disk. Nothing lives in memory only — all data survives a full container restart.
 
-<video src="data/demos/04_memory.mov" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/3c38f925-6f8e-4acd-bd96-fd99bef12b4c" controls width="100%"></video>
