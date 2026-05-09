@@ -11,9 +11,12 @@ from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from core.settings import settings
+from core.logger import get_logger
 from stores.documents import DocumentsStore
 from stores.semantics import SemanticsStore
 from stores.lexicals import LexicalsStore
+
+logger = get_logger(__file__)
 
 DEFAULT_CHUNK_SIZE = 350
 DEFAULT_CHUNK_OVERLAP = 30
@@ -146,18 +149,32 @@ class DocumentIngestionService:
             "Document fingerprint registry",
         )
 
+        logger.info(
+            "Document ingestion service initialized: collections=%s, fingerprints=%s",
+            len(self._collection_registry),
+            len(self._document_fingerprint_registry),
+        )
+
     def _load_json_registry(
         self,
         registry_path: Path,
         registry_name: str,
     ) -> dict[str, Any]:
         if not registry_path.exists():
+            logger.info(
+                "%s not found; creating empty registry: %s",
+                registry_name,
+                registry_path,
+            )
             registry_path.write_text("{}", encoding="utf-8")
             return {}
 
         try:
-            return json.loads(registry_path.read_text(encoding="utf-8"))
+            data = json.loads(registry_path.read_text(encoding="utf-8"))
+            logger.info("Loaded %s: entries=%s", registry_name, len(data))
+            return data
         except json.JSONDecodeError as exc:
+            logger.exception("%s is corrupted: %s", registry_name, registry_path)
             raise RuntimeError(
                 f"{registry_name} is corrupted: {registry_path}"
             ) from exc
@@ -167,10 +184,15 @@ class DocumentIngestionService:
         registry_path: Path,
         registry: dict[str, Any],
     ) -> None:
-        registry_path.write_text(
-            json.dumps(registry, indent=4, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        try:
+            registry_path.write_text(
+                json.dumps(registry, indent=4, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            logger.debug("Saved registry: path='%s', entries=%s", registry_path, len(registry))
+        except Exception:
+            logger.exception("Failed to save registry: %s", registry_path)
+            raise
 
     def _save_collection_registry(self) -> None:
         self._save_json_registry(
@@ -196,6 +218,8 @@ class DocumentIngestionService:
         document_name: str,
         user_description: str,
     ) -> str:
+        logger.info("Rewriting document description: document='%s'", document_name)
+
         messages = self._description_rewrite_prompt.format_messages(
             document_name=document_name,
             user_description=user_description,
@@ -205,8 +229,13 @@ class DocumentIngestionService:
         rewritten = str(response.content).strip()
 
         if not rewritten:
+            logger.warning(
+                "Description rewrite returned empty; falling back to user description: document='%s'",
+                document_name,
+            )
             return user_description
 
+        logger.info("Document description rewritten: document='%s'", document_name)
         return rewritten
 
     async def _is_collection_relevant(
@@ -225,16 +254,24 @@ class DocumentIngestionService:
         answer = str(response.content).strip().lower()
 
         if answer.startswith("false"):
+            logger.debug("Collection relevance check: relevant=False")
             return False
 
         # High-recall default: include collection if output is unclear.
+        logger.debug("Collection relevance check: relevant=True")
         return True
 
     async def _select_relevant_collections(self, query: str) -> list[str]:
         if not self._collection_registry:
+            logger.info("Collection selection skipped; no collections registered")
             return []
 
         collection_names = list(self._collection_registry.keys())
+
+        logger.info(
+            "Selecting relevant collections: total_collections=%s",
+            len(collection_names),
+        )
 
         tasks = [
             self._is_collection_relevant(
@@ -257,7 +294,15 @@ class DocumentIngestionService:
             if is_relevant
         ]
 
-        return selected_collections or collection_names
+        result = selected_collections or collection_names
+
+        logger.info(
+            "Collections selected: selected=%s, total=%s",
+            len(result),
+            len(collection_names),
+        )
+
+        return result
 
     async def aadd_document(
         self,
@@ -267,19 +312,34 @@ class DocumentIngestionService:
     ) -> dict:
         source_path = Path(document_path)
 
+        logger.info(
+            "Adding document: document='%s', source='%s'",
+            document_name,
+            source_path,
+        )
+
         if not source_path.exists():
+            logger.error("Document add failed: source file does not exist: %s", source_path)
             raise FileNotFoundError(
                 f"Cannot add document. File does not exist: {source_path}"
             )
 
         if not source_path.is_file():
+            logger.error("Document add failed: source path is not a file: %s", source_path)
             raise ValueError(
                 f"Cannot add document. Expected a file path, got: {source_path}"
             )
 
         documents = PyMuPDFLoader(str(source_path)).load()
         if not documents:
+            logger.error("Document add failed: no pages loaded: source='%s'", source_path)
             raise ValueError(f"No pages were loaded from document: {source_path}")
+
+        logger.info(
+            "Document loaded: document='%s', pages=%s",
+            document_name,
+            len(documents),
+        )
 
         document_fingerprint = self._compute_document_fingerprint(documents)
         existing_document_name = self._document_fingerprint_registry.get(
@@ -287,6 +347,11 @@ class DocumentIngestionService:
         )
 
         if existing_document_name is not None:
+            logger.info(
+                "Document add skipped; duplicate detected: document='%s', existing='%s'",
+                document_name,
+                existing_document_name,
+            )
             return {
                 "existed": True,
                 "existing_document_name": existing_document_name,
@@ -295,20 +360,35 @@ class DocumentIngestionService:
 
         chunks = self._splitter.split_documents(documents)
         if not chunks:
+            logger.error(
+                "Document add failed: no chunks produced: document='%s', source='%s'",
+                document_name,
+                source_path,
+            )
             raise ValueError(
                 f"Document was loaded but produced no chunks: {source_path}"
             )
 
+        logger.info(
+            "Document chunked: document='%s', chunks=%s",
+            document_name,
+            len(chunks),
+        )
+
         for chunk in chunks:
             chunk.metadata["document_name"] = document_name
 
-        tasks = [
-            self._documents_store.aadd_document(document_name, document_path),
-            self._semantics_store.aadd_document(document_name, chunks),
-            self._lexicals_store.aadd_document(document_name, chunks),
-        ]
+        try:
+            tasks = [
+                self._documents_store.aadd_document(document_name, document_path),
+                self._semantics_store.aadd_document(document_name, chunks),
+                self._lexicals_store.aadd_document(document_name, chunks),
+            ]
 
-        await asyncio.gather(*tasks)
+            await asyncio.gather(*tasks)
+        except Exception:
+            logger.exception("Failed to ingest document into stores: document='%s'", document_name)
+            raise
 
         routing_description = self._rewrite_document_description(
             document_name=document_name,
@@ -324,6 +404,8 @@ class DocumentIngestionService:
         self._save_collection_registry()
         self._save_document_fingerprint_registry()
 
+        logger.info("Document added successfully: document='%s'", document_name)
+
         return {
             "existed": False,
             "existing_document_name": document_name,
@@ -332,15 +414,24 @@ class DocumentIngestionService:
 
     async def aremove_document(self, document_name: str) -> None:
         if document_name not in self._collection_registry:
+            logger.info(
+                "Document remove skipped; not registered: document='%s'", document_name
+            )
             return
 
-        tasks = [
-            self._documents_store.aremove_document(document_name),
-            self._semantics_store.aremove_document(document_name),
-            self._lexicals_store.aremove_document(document_name),
-        ]
+        logger.info("Removing document: document='%s'", document_name)
 
-        await asyncio.gather(*tasks)
+        try:
+            tasks = [
+                self._documents_store.aremove_document(document_name),
+                self._semantics_store.aremove_document(document_name),
+                self._lexicals_store.aremove_document(document_name),
+            ]
+
+            await asyncio.gather(*tasks)
+        except Exception:
+            logger.exception("Failed to remove document from stores: document='%s'", document_name)
+            raise
 
         self._collection_registry.pop(document_name)
 
@@ -353,17 +444,32 @@ class DocumentIngestionService:
         for fingerprint in fingerprints_to_remove:
             self._document_fingerprint_registry.pop(fingerprint)
 
+        logger.info(
+            "Document removed: document='%s', fingerprints_removed=%s",
+            document_name,
+            len(fingerprints_to_remove),
+        )
+
         self._save_collection_registry()
         self._save_document_fingerprint_registry()
 
     async def aget_retrievers(self, query: str):
         selected_collections = await self._select_relevant_collections(query)
         if not selected_collections:
+            logger.error("Cannot create retrievers; no collections registered")
             raise RuntimeError(
                 "Cannot create retriever. No documents are registered in semantic store."
             )
+
+        logger.info(
+            "Building retrievers: selected_collections=%s",
+            len(selected_collections),
+        )
+
         semantics_retriever = self._semantics_store.get_retriever(selected_collections)
         lexicals_retriever = self._lexicals_store.get_retriever(selected_collections)
+
+        logger.info("Retrievers built successfully")
 
         return {
             "semantics_retriever": semantics_retriever,

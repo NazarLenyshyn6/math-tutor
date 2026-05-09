@@ -5,8 +5,11 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 from core.settings import settings
+from core.logger import get_logger
 from services.document_retrieval import DocumentRetrievalService
 from services.conversation_memory import ConversationMemoryService
+
+logger = get_logger(__file__)
 
 MAX_CONTEXT_CHARS = 45000
 
@@ -27,6 +30,11 @@ class ResponseSynthesisService:
             model=settings.llm_model_name,
             temperature=0.2,
             max_completion_tokens=8192,
+        )
+
+        logger.info(
+            "Response synthesis service initialized: max_context_chars=%s",
+            self._max_context_chars,
         )
 
         self._prompt = ChatPromptTemplate.from_messages(
@@ -218,17 +226,40 @@ Answer:
             )
 
             if total_chars + len(context_block) > self._max_context_chars:
+                logger.warning(
+                    "Context truncated at document %s/%s: total_chars=%s, limit=%s",
+                    index,
+                    len(documents),
+                    total_chars,
+                    self._max_context_chars,
+                )
                 break
 
             context_parts.append(context_block)
             total_chars += len(context_block)
 
+        logger.debug(
+            "Context formatted: materials=%s, total_chars=%s",
+            len(context_parts),
+            total_chars,
+        )
+
         return "\n---\n".join(context_parts)
 
     async def astream_response(self, query: str) -> AsyncIterator[str]:
+        logger.info("Starting response synthesis")
+
         documents = await self._document_retrieval_service.aretrieve(query)
+
+        logger.info("Retrieved documents for synthesis: count=%s", len(documents))
+
         context = self._format_context(documents)
         history = self._conversation_memory_service.get_conversation_history()
+
+        logger.info(
+            "Streaming LLM response: history_messages=%s",
+            len(history),
+        )
 
         chain = self._prompt | self._llm
 
@@ -245,6 +276,11 @@ Answer:
             if content:
                 response += content
                 yield content
+
+        logger.info(
+            "Response synthesis complete: response_chars=%s",
+            len(response),
+        )
 
         self._conversation_memory_service.add_interaction(
             query=query, response=response, documents=documents

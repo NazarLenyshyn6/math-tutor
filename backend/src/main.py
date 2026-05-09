@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 
 from core.settings import settings
+from core.logger import get_logger
 from stores.documents import DocumentsStore
 from stores.lexicals import LexicalsStore
 from stores.semantics import SemanticsStore
@@ -15,6 +16,8 @@ from services.document_ingestion import DocumentIngestionService
 from services.document_retrieval import DocumentRetrievalService
 from services.conversation_memory import ConversationMemoryService
 from services.response_synthesis import ResponseSynthesisService
+
+logger = get_logger(__file__)
 
 
 @asynccontextmanager
@@ -24,6 +27,8 @@ async def lifespan(app: FastAPI):
     Services are attached to ``app.state`` so they can be accessed from any route handler
     without using global variables or dependency injection boilerplate.
     """
+    logger.info("Application starting up")
+
     documents_store = DocumentsStore()
     semantics_store = SemanticsStore()
     lexicals_store = LexicalsStore()
@@ -46,10 +51,25 @@ async def lifespan(app: FastAPI):
     app.state.conversation_memory_service = conversation_memory_service
     app.state.response_synthesis_service = response_synthesis_service
 
+    logger.info("Application startup complete")
+
     yield
 
+    logger.info("Application shutting down")
 
-app = FastAPI(lifespan=lifespan)
+
+app = FastAPI(
+    lifespan=lifespan,
+    title="Math Tutor API",
+    description=(
+        "RAG-based math tutoring backend. "
+        "Upload PDF learning materials (textbooks, lecture notes, worksheets) and ask questions — "
+        "the API retrieves relevant content using hybrid semantic + lexical search, reranks it, "
+        "and streams a grounded, step-by-step explanation from an LLM. "
+        "Conversation history is maintained per session."
+    ),
+    version="1.0.0",
+)
 
 app.add_middleware(
     CORSMiddleware,

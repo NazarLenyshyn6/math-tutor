@@ -13,7 +13,10 @@ from langchain_classic.retrievers.document_compressors.cross_encoder_rerank impo
 from langchain_community.document_transformers import LongContextReorder
 
 from core.settings import settings
+from core.logger import get_logger
 from services.document_ingestion import DocumentIngestionService
+
+logger = get_logger(__file__)
 
 QEURY_EXPANSION_COUNT = 3
 ORIGINAL_SEMANTIC_WEIGHT = 1.0
@@ -69,6 +72,15 @@ class DocumentRetrievalService:
 
         self._context_reorder = LongContextReorder()
 
+        logger.info(
+            "Document retrieval service initialized: query_expansion_count=%s, "
+            "fusion_top_k=%s, rerank_top_k=%s, rrf_k=%s",
+            self._query_expansion_count,
+            self._fusion_top_k,
+            self._rerank_top_k,
+            self._rrf_k,
+        )
+
         self._query_expansion_prompt = ChatPromptTemplate.from_template("""
 You are a search query rewriting assistant for a RAG document retrieval system.
 
@@ -92,6 +104,11 @@ User query:
 """)
 
     def _generate_search_queries(self, query: str) -> list[str]:
+        logger.info(
+            "Generating search queries: query_expansion_count=%s",
+            self._query_expansion_count,
+        )
+
         chain = self._query_expansion_prompt | self._query_rewriter
 
         result: QueryExpansion = chain.invoke(
@@ -112,7 +129,11 @@ User query:
                 search_queries.append(normalized)
                 seen.add(key)
 
-        return search_queries[: self._query_expansion_count]
+        queries = search_queries[: self._query_expansion_count]
+
+        logger.info("Search queries generated: count=%s", len(queries))
+
+        return queries
 
     async def _aretrieve_documents(
         self, query: str, retriever: MergerRetriever
@@ -129,6 +150,12 @@ User query:
         ranked_document_lists: list[list[Document]],
         weights: list[float],
     ) -> list[Document]:
+        logger.debug(
+            "Fusing document lists: lists=%s, fusion_top_k=%s",
+            len(ranked_document_lists),
+            self._fusion_top_k,
+        )
+
         document_scores: dict[str, float] = defaultdict(float)
         documents_by_key: dict[str, Document] = {}
 
@@ -145,10 +172,18 @@ User query:
             reverse=True,
         )
 
-        return [
+        fused = [
             documents_by_key[document_key]
             for document_key in ranked_document_keys[: self._fusion_top_k]
         ]
+
+        logger.info(
+            "Documents fused: unique_docs=%s, returned=%s",
+            len(documents_by_key),
+            len(fused),
+        )
+
+        return fused
 
     def _rerank_documents(
         self,
@@ -156,35 +191,55 @@ User query:
         documents: list[Document],
     ) -> list[Document]:
         if not documents:
+            logger.info("Reranking skipped; no documents to rerank")
             return []
+
+        logger.info(
+            "Reranking documents: input=%s, rerank_top_k=%s",
+            len(documents),
+            self._rerank_top_k,
+        )
 
         reranked_documents = self._reranker.compress_documents(
             documents=documents,
             query=query,
         )
 
-        return list(reranked_documents)
+        result = list(reranked_documents)
+
+        logger.info("Documents reranked: returned=%s", len(result))
+
+        return result
 
     def _reorder_documents(
         self,
         documents: list[Document],
     ) -> list[Document]:
         if not documents:
+            logger.info("Reordering skipped; no documents to reorder")
             return []
 
         reordered_documents = self._context_reorder.transform_documents(documents)
-        return list(reordered_documents)
+        result = list(reordered_documents)
+
+        logger.debug("Documents reordered: count=%s", len(result))
+
+        return result
 
     async def aretrieve(self, query: str) -> list[Document]:
+        logger.info("Starting document retrieval pipeline")
+
         retrievers = await self._document_ingestion_service.aget_retrievers(query)
 
         semantic_retriever = retrievers.get("semantics_retriever")
         lexical_retriever = retrievers.get("lexicals_retriever")
 
         if not semantic_retriever:
+            logger.error("Retrieval failed: semantic retriever not available")
             raise ValueError("Failed to get semantic retriever")
 
         if not lexical_retriever:
+            logger.error("Retrieval failed: lexical retriever not available")
             raise ValueError("Failed to get lexical retriever")
 
         search_queries = self._generate_search_queries(query)
@@ -210,6 +265,11 @@ User query:
             },
         ]
 
+        logger.info(
+            "Executing retrieval plan: tasks=%s",
+            len(retrieval_plan),
+        )
+
         retrieval_tasks = [
             self._aretrieve_documents(
                 item["query"],
@@ -223,5 +283,10 @@ User query:
         fused_documents = self._fuse_documents(retrieved_documents_list, fusion_weights)
         reranked_documents = self._rerank_documents(query, fused_documents)
         reordered_documents = self._reorder_documents(reranked_documents)
+
+        logger.info(
+            "Document retrieval pipeline complete: final_documents=%s",
+            len(reordered_documents),
+        )
 
         return reordered_documents
