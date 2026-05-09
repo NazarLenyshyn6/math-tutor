@@ -664,7 +664,7 @@ Below are short walkthroughs of each core feature.
 
 Each session keeps its own independent conversation history, so you can maintain different sessions side by side.
 
-<video src="data/demos/01_sessions.mov" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/8f3df5f9-5227-4f5d-8350-771544d66387" controls width="100%"></video>
 
 ---
 
@@ -672,7 +672,7 @@ Each session keeps its own independent conversation history, so you can maintain
 
 Upload a textbook, track ingestion progress, and explore the document list.
 
-<video src="data/demos/02_documents.mp4" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/7c4c3361-b8c9-47b3-b05a-79ff4891694d" controls width="100%"></video>
 
 ---
 
