@@ -37,17 +37,17 @@ A production-grade, document-grounded mathematics tutoring application. Users up
 │                                                              │
 │  /sessions   /session   /documents   /chat/stream            │
 │                                                              │
-│   ┌────────────┐  ┌────────────────┐  ┌───────────────────┐ │
-│   │  Document  │  │   Document     │  │    Response       │ │
-│   │ Ingestion  │  │   Retrieval    │  │    Synthesis      │ │
-│   │  Service   │  │   Service      │  │    Service        │ │
-│   └─────┬──────┘  └───────┬────────┘  └────────┬──────────┘ │
+│   ┌────────────┐  ┌────────────────┐  ┌───────────────────┐  │
+│   │  Document  │  │   Document     │  │    Response       │  │
+│   │ Ingestion  │  │   Retrieval    │  │    Synthesis      │  │
+│   │  Service   │  │   Service      │  │    Service        │  │
+│   └─────┬──────┘  └───────┬────────┘  └────────┬──────────┘  │
 │         │                 │                     │            │
-│   ┌─────▼──────┐  ┌───────▼────────┐  ┌────────▼──────────┐ │
-│   │  Documents │  │  Semantics     │  │  Conversation     │ │
-│   │  Store     │  │  Store +       │  │  Memory Service   │ │
-│   │ (WebP imgs)│  │  Lexicals Store│  │  (JSON sessions)  │ │
-│   └────────────┘  └───────┬────────┘  └───────────────────┘ │
+│   ┌─────▼──────┐  ┌───────▼────────┐  ┌────────▼──────────┐  │
+│   │  Documents │  │  Semantics     │  │  Conversation     │  │
+│   │  Store     │  │  Store +       │  │  Memory Service   │  │
+│   │ (WebP imgs)│  │  Lexicals Store│  │  (JSON sessions)  │  │
+│   └────────────┘  └───────┬────────┘  └───────────────────┘  │
 └───────────────────────────┼──────────────────────────────────┘
                             │
               ┌─────────────┴──────────────┐
@@ -240,16 +240,16 @@ Stage 2 ── Multi-Source Parallel Retrieval
             │         Embeddings: all-MiniLM-L6-v2           │
             │         K=10 per query                         │
             │                                                │
-            │  original  → K=10  weight = 1.0               │
-            │  alt_1     → K=10  weight = 0.3               │
-            │  alt_2     → K=10  weight = 0.3               │
-            │  alt_3     → K=10  weight = 0.3               │
+            │  original  → K=10  weight = 1.0                │
+            │  alt_1     → K=10  weight = 0.3                │
+            │  alt_2     → K=10  weight = 0.3                │
+            │  alt_3     → K=10  weight = 0.3                │
             ├────────────────────────────────────────────────┤
             │         Lexical (Elasticsearch)                │
             │         BM25-like full-text search             │
             │         match operator: "or"  (high recall)    │
             │                                                │
-            │  original  → K=10  weight = 1.5               │
+            │  original  → K=10  weight = 1.5                │
             └────────────────────────────────────────────────┘
     │
     ▼
